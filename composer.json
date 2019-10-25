@@ -11,13 +11,12 @@
         "homepage": "https://www.arvato-systems.de/aws"
       }
     ],
-    "minimum-stability": "dev",
     "prefer-stable": true,
     "autoload": {
         "files": [ "command.php" ]
     },
     "require": {
-        "wp-cli/wp-cli": "^1.1.0"
+        "wp-cli/wp-cli": "^2.3.0"
     },
     "require-dev": {
         "behat/behat": "~2.5"
