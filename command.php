@@ -28,9 +28,11 @@ class S3Migration_Command
    * 
    * [--protocol=<protocol>]
    * default: https
+   * ---
    * options:
    *   - https
    *   - http
+   * ---
    * 
    * ## EXAMPLES
    * 
@@ -48,7 +50,9 @@ class S3Migration_Command
   {
     WP_CLI::success("Starting migration to S3");
 
-    list($output, $purge, $protocol) = $args;
+    WP_CLI::debug($args);
+
+    // list($output, $purge, $protocol) = $args;
 
     if ($purge === true) {
 
@@ -210,7 +214,7 @@ class S3Migration_Command
   private function getAllSiteIDs()
   {
     $blog_IDs = array();
-    $blog_IDs . push(get_current_blog_id());
+    $blog_IDs.push(get_current_blog_id());
 
     // multisite check
     $isMultisite = is_multisite();
