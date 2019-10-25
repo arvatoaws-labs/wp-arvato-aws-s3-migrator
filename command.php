@@ -63,13 +63,12 @@ class S3Migration_Command
     }
 
     $protocol = $protocol . "://";
+    WP_CLI::debug("Protocol is: " . $protocol);
 
     $siteIDs = $this->getAllSiteIDs();
 
-
-
     foreach ($siteIDs as $id) {
-      $this->runMigration($id, $protocol, $s3);
+      $this->runMigration($id, $protocol);
     }
   }
 
@@ -99,15 +98,17 @@ class S3Migration_Command
 
   private function getAWSURL()
   {
+    $s3 = $this->buildAndValidateS3();
+
     if ($as3cf->get_setting('domain') === "cloudfront" && $as3cf->get_setting('cloudfront')) {
       $aws_url = $as3cf->get_setting('cloudfront');
     } else {
-      $aws_url = 's3-' . $s3_region . '.amazonaws.com/' . $as3cf->get_setting('bucket');
+      $aws_url = 's3-' . $s3->region . '.amazonaws.com/' . $as3cf->get_setting('bucket');
     }
     return $aws_url;
   }
 
-  private function runMigration(int $siteID, string $protocol, object $s3)
+  private function runMigration(int $siteID, string $protocol)
   {
     WP_CLI::log("Starting migration for site ID " . $siteID);
     $this->switchSiteContext($siteID);
@@ -213,8 +214,7 @@ class S3Migration_Command
 
   private function getAllSiteIDs()
   {
-    $blog_IDs = array();
-    $blog_IDs.push(get_current_blog_id());
+    $blog_IDs = array(get_current_blog_id());
 
     // multisite check
     $isMultisite = is_multisite();
