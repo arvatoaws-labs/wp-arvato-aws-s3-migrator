@@ -46,13 +46,16 @@ class S3Migration_Command
    * 
    * @when after_wp_load
    */
-  public function __invoke($args)
+  public function __invoke($args, $assoc_args)
   {
-    WP_CLI::success("Starting migration to S3");
+    WP_CLI::log("Starting migration to S3");
 
-    WP_CLI::debug($args);
+    //get input args
+    $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
+    $output = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
+    $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
-    // list($output, $purge, $protocol) = $args;
+    WP_CLI::debug("Inputs: Protocol=". print_r($protocol) . " / Output=". print_r($output) . " / Purge=" . print_r($purge));
 
     if ($purge === true) {
 
