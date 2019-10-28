@@ -4,7 +4,7 @@
 class S3Migration_Command
 {
 
-  private function doprechecks(){
+  private function doPrechecks(){
 
     if (php_sapi_name() != 'cli') {
       WP_CLI::error("This script must run from CLI");
@@ -16,7 +16,6 @@ class S3Migration_Command
       WP_CLI::halt(1);
     }
 
-    // print_r($GLOBALS);
   }
 
   /**
@@ -53,7 +52,7 @@ class S3Migration_Command
   public function __invoke($args, $assoc_args)
   {
 
-    $this->doprechecks();
+    $this->doPrechecks();
 
     WP_CLI::debug("Starting migration to S3");
 
@@ -64,9 +63,14 @@ class S3Migration_Command
 
     WP_CLI::debug("Inputs: Protocol=" . json_encode($protocol) . " / Output=" . json_encode($output) . " / Purge=" . json_encode($purge));
 
+    $siteIDs = $this->getAllSiteIDs();
+
     if ($purge === true) {
 
-      $this->purge($output);
+      foreach($siteIDs as $id){
+        $this->purge($id, $output);
+      }
+      
 
       WP_CLI::halt(0);
       return;
@@ -75,7 +79,7 @@ class S3Migration_Command
     $protocol = $protocol . "://";
     WP_CLI::debug("Protocol is: " . $protocol);
 
-    $siteIDs = $this->getAllSiteIDs();
+    
 
     foreach ($siteIDs as $id) {
       $this->runMigration($id, $protocol);
@@ -142,24 +146,26 @@ class S3Migration_Command
    * 
    * @subcommand purge
    */
-  private function purge(bool $output)
+  private function purge(int $siteID, bool $output)
   {
-    WP_CLI::success("Purging postmeta table...");
+    WP_CLI::info("Purging postmeta table for Blog-ID ". $siteID);
 
-    //@todo handle multisite
-
+    $this->switchSiteContext($siteID);
     //@todo add logging
 
     /**
      * @global wpdb $wpdb
      */
     global $wpdb;
+
     $wpdb->delete(
       $wpdb->postmeta,
       array(
         'meta_key' => 'amazonS3_info',
       )
     );
+
+    $this->resetContext();
 
     WP_CLI::success("Purging done!");
   }
@@ -169,14 +175,14 @@ class S3Migration_Command
     global $wpdb;
 
     $s3 = $this->buildAndValidateS3();
-    //@TODO make function repeatable -> upsert not always insert
+    
     $media_to_update = $wpdb->get_results("SELECT * FROM " . $wpdb->postmeta . " WHERE meta_key = '_wp_attached_file'");
     // loop through each media item, adding the amazonS3_info meta data
     foreach ($media_to_update as $media_item) {
       $media_meta_data = serialize(
         array(
           'bucket' => $s3->bucket,
-          'key'    => $this->getAWSFolderPrefix(as3cf) . $media_item->meta_value,
+          'key'    => $this->getAWSFolderPrefix() . $media_item->meta_value,
           'region' => $s3->region,
         )
       );
@@ -230,7 +236,6 @@ class S3Migration_Command
 
   private function getWPFolderPrefix()
   {
-    //@TODO test if WP_CLI\Utils\basename works as well
     return str_replace(ABSPATH, '', wp_upload_dir()['basedir']) . '/';
   }
 
@@ -271,7 +276,7 @@ class S3Migration_Command
   private function switchSiteContext(int $blogID)
   {
     if (is_multisite() === true) {
-      switch_to_blog($blogID);
+      $this->switch_to_blog($blogID);
       WP_CLI::success("Swtiched site id to " . $blogID);
     } else {
       WP_CLI::log("No multisite -> no switch necessary.");
@@ -281,7 +286,7 @@ class S3Migration_Command
   private function resetContext()
   {
     WP_CLI::debug("restoring blog...");
-    restore_current_blog();
+    $this->restore_current_blog();
   }
 
   private function updatePostContent($type, $table, $local_uri, $aws_uri, $revert = false)
