@@ -12,7 +12,8 @@ if (php_sapi_name() != 'cli') {
 
 if (!class_exists('Amazon_S3_And_CloudFront')) {
   WP_CLI::warning("WP Offload Media Lite plugin is not active! - try to activate it.");
-
+  
+  WP_CLI::debug('run command: "plugin activate wp-amazon-s3-and-cloudfront"' );
   WP_CLI::runcommand('plugin activate wp-amazon-s3-and-cloudfront');
 
   if (!class_exists('Amazon_S3_And_CloudFront')) {
