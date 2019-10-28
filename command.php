@@ -10,6 +10,11 @@ if (php_sapi_name() != 'cli') {
   exit(2);
 }
 
+if ( ! class_exists( 'Amazon_S3_And_CloudFront' ) ) {
+  echo "ERROR: WP Offload Media Lite plugin is not active!";
+  exit(1);
+}
+
 
 
 class S3Migration_Command
@@ -55,7 +60,7 @@ class S3Migration_Command
     $output = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
-    WP_CLI::debug("Inputs: Protocol=". print_r($protocol) . " / Output=". print_r($output) . " / Purge=" . print_r($purge));
+    WP_CLI::debug("Inputs: Protocol=" . $protocol . " / Output=" . print_r($output) . " / Purge=" . print_r($purge));
 
     if ($purge === true) {
 
