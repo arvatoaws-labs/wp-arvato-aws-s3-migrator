@@ -72,7 +72,7 @@ class S3Migration_Command
     $output = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
-    WP_CLI::debug("Inputs: Protocol=" . $protocol . " / Output=" . print_r($output) . " / Purge=" . print_r($purge));
+    WP_CLI::debug("Inputs: Protocol=" . json_encode($protocol) . " / Output=" . json_encode($output) . " / Purge=" . json_encode($purge));
 
     if ($purge === true) {
 
