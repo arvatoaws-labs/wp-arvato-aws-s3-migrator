@@ -10,6 +10,10 @@ if (php_sapi_name() != 'cli') {
   WP_CLI::hast(2);
 }
 
+//Testing
+WP_CLI::debug("homepath: ". get_home_path());
+WP_CLI::debug("homedir: " . WP_CLI\Utils\get_home_dir());
+
 if (file_exists(get_home_path() . 'wp-config.php')) {
   WP_CLI::debug('loading wp-config.php in folder '. ABSPATH);
   require_once get_home_path() . 'wp-config.php';
