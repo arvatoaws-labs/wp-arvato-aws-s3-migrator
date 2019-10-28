@@ -10,9 +10,9 @@ if (php_sapi_name() != 'cli') {
   WP_CLI::hast(2);
 }
 
-if (file_exists(ABSPATH . 'wp-config.php')) {
+if (file_exists(get_home_path() . 'wp-config.php')) {
   WP_CLI::debug('loading wp-config.php in folder '. ABSPATH);
-  require_once ABSPATH . 'wp-config.php';
+  require_once get_home_path() . 'wp-config.php';
 } else {
   WP_CLI::error('wp-config.php file not found in folder: ' . ABSPATH);
   WP_CLI::halt(1);
@@ -188,15 +188,17 @@ class S3Migration_Command
           'region' => $s3->region,
         )
       );
-      // Insert the postmeta record that WP Offload S3 Lite uses
-      $wpdb->insert(
-        $wpdb->postmeta,
-        array(
-          'post_id'    => $media_item->post_id,
-          'meta_key'   => 'amazonS3_info',
-          'meta_value' => $media_meta_data,
-        )
-      );
+      // Upsert the postmeta record that WP Offload S3 Lite uses
+      update_metadata($wpdb->postmeta, $media_item->post_id, 'amazonS3_info', $media_meta_data);
+
+      // $wpdb->insert(
+      //   $wpdb->postmeta,
+      //   array(
+      //     'post_id'    => $media_item->post_id,
+      //     'meta_key'   => 'amazonS3_info',
+      //     'meta_value' => $media_meta_data,
+      //   )
+      // );
     }
   }
 
