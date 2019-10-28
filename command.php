@@ -1,37 +1,27 @@
 <?php
 
-if (!class_exists('WP_CLI')) {
-  echo "ERROR: class 'WP_CLI' not found";
-  exit(2);
-}
-
-if (php_sapi_name() != 'cli') {
-  WP_CLI::error("This script must run from CLI");
-  WP_CLI::hast(2);
-}
-
-//Testing
-WP_CLI::debug("homedir: " . WP_CLI\Utils\get_home_dir());
-
-if (file_exists(WP_CLI\Utils\get_home_dir() . 'wp-config.php')) {
-  WP_CLI::debug('loading wp-config.php in folder ' . ABSPATH);
-  require_once  WP_CLI\Utils\get_home_dir() . 'wp-config.php';
-} else {
-  WP_CLI::error('wp-config.php file not found in folder: ' . ABSPATH);
-  WP_CLI::halt(1);
-}
-
-if (!class_exists('Amazon_S3_And_CloudFront')) {
-  WP_CLI::error("WP Offload Media Lite plugin is not active!");
-  WP_CLI::halt(1);
-}
-
-
 
 class S3Migration_Command
 {
 
-  private $as3cf;
+  private function doprechecks(){
+    if (!class_exists('WP_CLI')) {
+      echo "ERROR: class 'WP_CLI' not found";
+      exit(2);
+    }
+    
+    if (php_sapi_name() != 'cli') {
+      WP_CLI::error("This script must run from CLI");
+      WP_CLI::hast(2);
+    }
+
+    if (!class_exists('Amazon_S3_And_CloudFront')) {
+      WP_CLI::error("WP Offload Media Lite plugin is not active!");
+      WP_CLI::halt(1);
+    }
+
+    // print_r($GLOBALS);
+  }
 
   /**
    * Starts S3 migration
@@ -67,6 +57,10 @@ class S3Migration_Command
   public function __invoke($args, $assoc_args)
   {
     global $as3cf;
+
+    $this->doprechecks();
+
+    WP_CLI::debug($as3cf);
 
     WP_CLI::log("Starting migration to S3");
 
