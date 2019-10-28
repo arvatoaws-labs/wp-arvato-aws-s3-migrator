@@ -56,13 +56,10 @@ class S3Migration_Command
    */
   public function __invoke($args, $assoc_args)
   {
-    global $as3cf;
 
     $this->doprechecks();
 
-    WP_CLI::debug($as3cf);
-
-    WP_CLI::log("Starting migration to S3");
+    WP_CLI::debug("Starting migration to S3");
 
     //get input args
     $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
@@ -82,24 +79,18 @@ class S3Migration_Command
     $protocol = $protocol . "://";
     WP_CLI::debug("Protocol is: " . $protocol);
 
-
-    WP_CLI::do_hook('init');
-
-    WP_CLI::debug("as3cf-class: " . $as3cf);
-
-
     $siteIDs = $this->getAllSiteIDs();
 
     foreach ($siteIDs as $id) {
-      $this->runMigration($id, $protocol, $as3cf);
+      $this->runMigration($id, $protocol);
     }
   }
 
-  private function buildAndValidateS3($as3cf)
+  private function buildAndValidateS3()
   {
     $s3 = new stdClass();
-    $s3->region = $this->getS3Region($as3cf);
-    $s3->bucket = $this->getS3Bucket($as3cf);
+    $s3->region = $this->getS3Region();
+    $s3->bucket = $this->getS3Bucket();
 
     if (!$s3->bucket || !$s3->region) {
       WP_CLI::error("WP Offload S3 Lite setup  appears to be incomplete.");
@@ -109,19 +100,25 @@ class S3Migration_Command
     return $s3;
   }
 
-  private function getS3Bucket($as3cf)
+  private function getS3Bucket()
   {
+    global $as3cf;
+
     return $as3cf->get_setting('bucket');
   }
 
-  private function getS3Region($as3cf)
+  private function getS3Region()
   {
+    global $as3cf;
+
     return ($as3cf->get_setting('region')) ? $as3cf->get_setting('region') : $as3cf->get_bucket_region($as3cf->get_setting('bucket'));
   }
 
-  private function getAWSURL($as3cf)
+  private function getAWSURL()
   {
-    $s3 = $this->buildAndValidateS3($as3cf);
+    global $as3cf;
+
+    $s3 = $this->buildAndValidateS3();
 
     if ($as3cf->get_setting('domain') === "cloudfront" && $as3cf->get_setting('cloudfront')) {
       $aws_url = $as3cf->get_setting('cloudfront');
@@ -131,14 +128,14 @@ class S3Migration_Command
     return $aws_url;
   }
 
-  private function runMigration(int $siteID, string $protocol, $as3cf)
+  private function runMigration(int $siteID, string $protocol)
   {
     WP_CLI::log("Starting migration for site ID " . $siteID);
     $this->switchSiteContext($siteID);
 
-    $this->performUpdateMetadata($as3cf);
+    $this->performUpdateMetadata();
 
-    $this->performRewritePostContent($protocol, $as3cf);
+    $this->performRewritePostContent($protocol);
 
     //finally reset context
     $this->resetContext();
@@ -171,9 +168,11 @@ class S3Migration_Command
     WP_CLI::success("Purging done!");
   }
 
-  private function performUpdateMetadata($as3cf)
+  private function performUpdateMetadata()
   {
-    $s3 = $this->buildAndValidateS3($as3cf);
+    global $wpdb;
+
+    $s3 = $this->buildAndValidateS3();
     //@TODO make function repeatable -> upsert not always insert
     $media_to_update = $wpdb->get_results("SELECT * FROM " . $wpdb->postmeta . " WHERE meta_key = '_wp_attached_file'");
     // loop through each media item, adding the amazonS3_info meta data
@@ -199,24 +198,26 @@ class S3Migration_Command
     }
   }
 
-  private function performRewritePostContent(string $protocol, $as3cf)
+  private function performRewritePostContent(string $protocol)
   {
+    global $wpdb;
+    
     $wp_folder_prefix = $this->getWPFolderPrefix();
     WP_CLI::debug("WP Folder Prefix is: " . $wp_folder_prefix);
 
-    $aws_url = $this->getAWSURL($as3cf);
-    $aws_folder_prefix = $this->getAWSFolderPrefix($as3cf);
+    $aws_url = $this->getAWSURL();
+    $aws_folder_prefix = $this->getAWSFolderPrefix();
 
     if ($db_connection = mysqli_connect($wpdb->dbhost, $wpdb->dbuser, $wpdb->dbpassword, $wpdb->dbname)) {
       // Query to update post content 'href'
-      $query_post_content_href = updatePostContent(
+      $query_post_content_href = $this->updatePostContent(
         'href',
         $wpdb->posts,
         get_site_url($wpdb->blogid) . '/' . $wp_folder_prefix,
         "$protocol$aws_url/$aws_folder_prefix"
       );
       // Query to update post content 'src'
-      $query_post_content_src = updatePostContent(
+      $query_post_content_src = $this->updatePostContent(
         'src',
         $wpdb->posts,
         get_site_url($wpdb->blogid) . '/' . $wp_folder_prefix,
@@ -237,20 +238,23 @@ class S3Migration_Command
     return str_replace(ABSPATH, '', wp_upload_dir()['basedir']) . '/';
   }
 
-  private function getAWSFolderPrefix($as3cf)
+  private function getAWSFolderPrefix()
   {
+    global $as3cf;
+
     return $as3cf->get_setting('enable-object-prefix') ? $as3cf->get_setting('object-prefix') : $this->getWPFolderPrefix();
   }
 
   private function getAllSiteIDs()
   {
+    global $wpdb;
+
     $blog_IDs = array(get_current_blog_id());
 
     // multisite check
     $isMultisite = is_multisite();
     $multiSite_Txt = ($isMultisite === true) ? "YES" : "NO";
-    WP_CLI::success("INFO: Is Multisite: " . $multiSite_Txt);
-
+    WP_CLI::success("Is Multisite: " . $multiSite_Txt);
 
     if ($isMultisite === true) {
 
