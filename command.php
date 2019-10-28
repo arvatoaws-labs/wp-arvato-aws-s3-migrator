@@ -11,12 +11,11 @@ if (php_sapi_name() != 'cli') {
 }
 
 //Testing
-WP_CLI::debug("homepath: ". get_home_path());
 WP_CLI::debug("homedir: " . WP_CLI\Utils\get_home_dir());
 
-if (file_exists(get_home_path() . 'wp-config.php')) {
-  WP_CLI::debug('loading wp-config.php in folder '. ABSPATH);
-  require_once get_home_path() . 'wp-config.php';
+if (file_exists(WP_CLI\Utils\get_home_dir() . 'wp-config.php')) {
+  WP_CLI::debug('loading wp-config.php in folder ' . ABSPATH);
+  require_once  WP_CLI\Utils\get_home_dir() . 'wp-config.php';
 } else {
   WP_CLI::error('wp-config.php file not found in folder: ' . ABSPATH);
   WP_CLI::halt(1);
