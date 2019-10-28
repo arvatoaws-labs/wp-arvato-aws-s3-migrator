@@ -10,16 +10,17 @@ if (php_sapi_name() != 'cli') {
   WP_CLI::hast(2);
 }
 
-if (!class_exists('Amazon_S3_And_CloudFront')) {
-  WP_CLI::warning("WP Offload Media Lite plugin is not active! - try to activate it.");
-  
-  WP_CLI::debug('run command: "plugin activate wp-amazon-s3-and-cloudfront"' );
-  WP_CLI::runcommand('plugin activate wp-amazon-s3-and-cloudfront');
+if (file_exists(ABSPATH . 'wp-config.php')) {
+  WP_CLI::debug('loading wp-config.php in folder '. ABSPATH);
+  require_once ABSPATH . 'wp-config.php';
+} else {
+  WP_CLI::error('wp-config.php file not found in folder: ' . ABSPATH);
+  WP_CLI::halt(1);
+}
 
-  if (!class_exists('Amazon_S3_And_CloudFront')) {
-    WP_CLI::error("WP Offload Media Lite plugin is not active!");
-    WP_CLI::halt(1);
-  }
+if (!class_exists('Amazon_S3_And_CloudFront')) {
+  WP_CLI::error("WP Offload Media Lite plugin is not active!");
+  WP_CLI::halt(1);
 }
 
 
