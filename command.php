@@ -5,11 +5,7 @@ class S3Migration_Command
 {
 
   private function doprechecks(){
-    if (!class_exists('WP_CLI')) {
-      echo "ERROR: class 'WP_CLI' not found";
-      exit(2);
-    }
-    
+
     if (php_sapi_name() != 'cli') {
       WP_CLI::error("This script must run from CLI");
       WP_CLI::hast(2);
@@ -201,7 +197,7 @@ class S3Migration_Command
   private function performRewritePostContent(string $protocol)
   {
     global $wpdb;
-    
+
     $wp_folder_prefix = $this->getWPFolderPrefix();
     WP_CLI::debug("WP Folder Prefix is: " . $wp_folder_prefix);
 
