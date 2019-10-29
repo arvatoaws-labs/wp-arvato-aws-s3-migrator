@@ -7,7 +7,8 @@ class S3Migration_Command
   /**
    * 
    */
-  private function doPrechecks(){
+  private function doPrechecks()
+  {
 
     if (php_sapi_name() != 'cli') {
       WP_CLI::error("This script must run from CLI");
@@ -18,7 +19,6 @@ class S3Migration_Command
       WP_CLI::error("WP Offload Media Lite plugin is not active!");
       WP_CLI::halt(1);
     }
-
   }
 
   /**
@@ -70,10 +70,10 @@ class S3Migration_Command
 
     if ($purge === true) {
 
-      foreach($siteIDs as $id){
+      foreach ($siteIDs as $id) {
         $this->purge($id, $output);
       }
-      
+
 
       WP_CLI::halt(0); //stop processing with exit code 0 = success
       return;
@@ -81,7 +81,7 @@ class S3Migration_Command
 
     $protocol = $protocol . "://";
     WP_CLI::debug("Protocol is: " . $protocol);
-    
+
     //run migration for each blog
     foreach ($siteIDs as $id) {
       $this->runMigration($id, $protocol);
@@ -173,7 +173,7 @@ class S3Migration_Command
    */
   private function purge(int $siteID, bool $output)
   {
-    WP_CLI::info("Purging postmeta table for Blog-ID: ". $siteID);
+    WP_CLI::info("Purging postmeta table for Blog-ID: " . $siteID);
 
     $this->switchSiteContext($siteID);
     //@todo add detailed logging
@@ -203,7 +203,7 @@ class S3Migration_Command
     global $wpdb;
 
     $s3 = $this->buildAndValidateS3();
-    
+
     $media_to_update = $wpdb->get_results("SELECT * FROM " . $wpdb->postmeta . " WHERE meta_key = '_wp_attached_file'");
     // loop through each media item, adding the amazonS3_info meta data
     foreach ($media_to_update as $media_item) {
@@ -340,12 +340,16 @@ class S3Migration_Command
   private function resetContext()
   {
     WP_CLI::debug("restoring blog...");
-    restore_current_blog(); //WP function
+    if (is_multisite()) {
+      restore_current_blog(); //WP function
+    } else {
+      WP_CLI::debug("No multisite - no restore needed");
+    }
   }
 
   /**
    * 
-   * @param $type
+   * @param string $type
    * @param string $table
    * @param string $local_uri
    * @param string $aws_uri
@@ -353,7 +357,7 @@ class S3Migration_Command
    * 
    * @return string update statement
    */
-  private function updatePostContent($type, $table, $local_uri, $aws_uri, $revert = false)
+  private function updatePostContent(string $type, string $table, string $local_uri, string $aws_uri, $revert = false)
   {
     $from = (!$revert) ? $local_uri : $aws_uri;
     $to   = (!$revert) ? $aws_uri : $local_uri;
