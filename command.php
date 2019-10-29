@@ -3,6 +3,10 @@
 
 class S3Migration_Command
 {
+  /**
+   * @var bool
+   */
+  private $S3validationDone = false;
 
   /**
    * 
@@ -73,8 +77,8 @@ class S3Migration_Command
       }
 
 
-      WP_CLI::halt(0); //stop processing with exit code 0 = success
-      return;
+      // WP_CLI::halt(0); //stop processing with exit code 0 = success
+      // return;
     }
 
     $protocol = $protocol . "://";
@@ -93,18 +97,40 @@ class S3Migration_Command
    * 
    * @return object
    */
-  private function buildAndValidateS3()
+  private function getS3Object()
   {
     $s3 = new stdClass();
     $s3->region = $this->getS3Region();
     $s3->bucket = $this->getS3Bucket();
+
+    //validate object on first GET
+    if (!$this->S3validationDone) {
+      $this->validateS3Object($s3);
+    }
+
+    return $s3;
+  }
+
+  /**
+   * 
+   * @param object $s3
+   * 
+   * @return bool true
+   */
+  private function validateS3Object(object $s3)
+  {
 
     if (!$s3->bucket || !$s3->region) {
       WP_CLI::error("WP Offload S3 Lite setup  appears to be incomplete.");
       WP_CLI::halt(1);
     }
 
-    return $s3;
+    $this->S3validationDone = true;
+
+    WP_CLI::debug("S3-Region: " .  $s3->region);
+    WP_CLI::debug("S3-Bucket: " .  $s3->bucket);
+
+    return true;
   }
 
   /**
@@ -136,13 +162,16 @@ class S3Migration_Command
   {
     global $as3cf;
 
-    $s3 = $this->buildAndValidateS3();
+    $s3 = $this->getS3Object();
 
     if ($as3cf->get_setting('domain') === "cloudfront" && $as3cf->get_setting('cloudfront')) {
       $aws_url = $as3cf->get_setting('cloudfront');
     } else {
       $aws_url = 's3-' . $s3->region . '.amazonaws.com/' . $as3cf->get_setting('bucket');
     }
+
+    WP_CLI::debug("AWS URL: " . $aws_url);
+
     return $aws_url;
   }
 
@@ -205,29 +234,24 @@ class S3Migration_Command
   {
     global $wpdb;
 
-    $s3 = $this->buildAndValidateS3();
+    $s3 = $this->getS3Object();
 
     $media_to_update = $wpdb->get_results("SELECT * FROM " . $wpdb->postmeta . " WHERE meta_key = '_wp_attached_file'");
-    // loop through each media item, adding the amazonS3_info meta data
-    foreach ($media_to_update as $media_item) {
-      $media_meta_data = serialize(
-        array(
-          'bucket' => $s3->bucket,
-          'key'    => $this->getAWSFolderPrefix() . $media_item->meta_value,
-          'region' => $s3->region,
-        )
-      );
-      // Upsert the postmeta record that WP Offload S3 Lite uses
-      update_metadata($wpdb->postmeta, $media_item->post_id, 'amazonS3_info', $media_meta_data);
 
-      // $wpdb->insert(
-      //   $wpdb->postmeta,
-      //   array(
-      //     'post_id'    => $media_item->post_id,
-      //     'meta_key'   => 'amazonS3_info',
-      //     'meta_value' => $media_meta_data,
-      //   )
-      // );
+    WP_CLI::debug("Media_to_update Size: " . count($media_to_update));
+
+    // loop through each media item, adding the amazonS3_info metadata
+    foreach ($media_to_update as $media_item) {
+
+      $mediaMetaData = array(
+        'bucket'   => $s3->bucket,
+        'key'      => $this->getAWSFolderPrefix() . $media_item->meta_value,
+        'region'   => $s3->region,
+        'provider' => 'aws'
+      );
+
+      // Upsert the postmeta record that WP Offload S3 Lite uses
+      update_post_meta($media_item->post_id, 'amazonS3_info', $mediaMetaData);
     }
   }
 
@@ -244,9 +268,12 @@ class S3Migration_Command
 
     $aws_url = $this->getAWSURL();
     $aws_folder_prefix = $this->getAWSFolderPrefix();
+    WP_CLI::debug("AWS Folder Prefix is: " . $aws_folder_prefix);
 
     if ($db_connection = mysqli_connect($wpdb->dbhost, $wpdb->dbuser, $wpdb->dbpassword, $wpdb->dbname)) {
       // Query to update post content 'href'
+      WP_CLI::debug("Site-URL: " . get_site_url($wpdb->blogid));
+
       $query_post_content_href = $this->updatePostContent(
         'href',
         $wpdb->posts,
@@ -364,6 +391,11 @@ class S3Migration_Command
   {
     $from = (!$revert) ? $local_uri : $aws_uri;
     $to   = (!$revert) ? $aws_uri : $local_uri;
+
+    WP_CLI::debug("UpdatePostContent 'TABLE': " . $table);
+    WP_CLI::debug("UpdatePostContent 'FROM': " . $from);
+    WP_CLI::debug("UpdatePostContent 'TO': " . $to);
+
     return "UPDATE $table SET post_content = replace(post_content, '$type=\"$from', '$type=\"$to');";
   }
 }
