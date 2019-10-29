@@ -4,6 +4,9 @@
 class S3Migration_Command
 {
 
+  /**
+   * 
+   */
   private function doPrechecks(){
 
     if (php_sapi_name() != 'cli') {
@@ -72,20 +75,23 @@ class S3Migration_Command
       }
       
 
-      WP_CLI::halt(0);
+      WP_CLI::halt(0); //stop processing with exit code 0 = success
       return;
     }
 
     $protocol = $protocol . "://";
     WP_CLI::debug("Protocol is: " . $protocol);
-
     
-
+    //run migration for each blog
     foreach ($siteIDs as $id) {
       $this->runMigration($id, $protocol);
     }
   }
 
+  /**
+   * 
+   * @return object
+   */
   private function buildAndValidateS3()
   {
     $s3 = new stdClass();
@@ -100,6 +106,10 @@ class S3Migration_Command
     return $s3;
   }
 
+  /**
+   * 
+   * @return string bucket name
+   */
   private function getS3Bucket()
   {
     global $as3cf;
@@ -107,6 +117,10 @@ class S3Migration_Command
     return $as3cf->get_setting('bucket');
   }
 
+  /**
+   * 
+   * @return string s3-region
+   */
   private function getS3Region()
   {
     global $as3cf;
@@ -114,6 +128,9 @@ class S3Migration_Command
     return ($as3cf->get_setting('region')) ? $as3cf->get_setting('region') : $as3cf->get_bucket_region($as3cf->get_setting('bucket'));
   }
 
+  /**
+   * @return string
+   */
   private function getAWSURL()
   {
     global $as3cf;
@@ -128,6 +145,13 @@ class S3Migration_Command
     return $aws_url;
   }
 
+  /**
+   * 
+   * 
+   * @param int $siteID
+   * @param string $protocol
+   * 
+   */
   private function runMigration(int $siteID, string $protocol)
   {
     WP_CLI::log("Starting migration for site ID " . $siteID);
@@ -143,15 +167,16 @@ class S3Migration_Command
 
   /**
    * Remove all entries from 'postmeta' table with meta_key 'amazonS3_info'
-   * 
-   * @subcommand purge
+   *  
+   * @param int $siteID
+   * @param bool $output
    */
   private function purge(int $siteID, bool $output)
   {
-    WP_CLI::info("Purging postmeta table for Blog-ID ". $siteID);
+    WP_CLI::info("Purging postmeta table for Blog-ID: ". $siteID);
 
     $this->switchSiteContext($siteID);
-    //@todo add logging
+    //@todo add detailed logging
 
     /**
      * @global wpdb $wpdb
@@ -170,6 +195,9 @@ class S3Migration_Command
     WP_CLI::success("Purging done!");
   }
 
+  /**
+   * 
+   */
   private function performUpdateMetadata()
   {
     global $wpdb;
@@ -200,6 +228,10 @@ class S3Migration_Command
     }
   }
 
+  /**
+   * 
+   * @param string $protocol
+   */
   private function performRewritePostContent(string $protocol)
   {
     global $wpdb;
@@ -234,11 +266,17 @@ class S3Migration_Command
     }
   }
 
+  /**
+   * 
+   */
   private function getWPFolderPrefix()
   {
     return str_replace(ABSPATH, '', wp_upload_dir()['basedir']) . '/';
   }
 
+  /**
+   * 
+   */
   private function getAWSFolderPrefix()
   {
     global $as3cf;
@@ -246,6 +284,11 @@ class S3Migration_Command
     return $as3cf->get_setting('enable-object-prefix') ? $as3cf->get_setting('object-prefix') : $this->getWPFolderPrefix();
   }
 
+  /**
+   * Get all IDs of the blog(s). 
+   * 
+   * @return array Array with blog ids
+   */
   private function getAllSiteIDs()
   {
     global $wpdb;
@@ -254,14 +297,18 @@ class S3Migration_Command
 
     // multisite check
     $isMultisite = is_multisite();
-    $multiSite_Txt = ($isMultisite === true) ? "YES" : "NO";
-    WP_CLI::success("Is Multisite: " . $multiSite_Txt);
+    // $multiSite_Txt = ($isMultisite === true) ? "YES" : "NO";
+    WP_CLI::success("Is Multisite: " . json_encode($isMultisite));
 
     if ($isMultisite === true) {
 
       if (function_exists('get_sites') && function_exists('get_current_network_id')) {
+        WP_CLI::debug("getting blog IDs with WP-function");
+
         $site_ids = get_sites(array('fields' => 'ids', 'network_id' => get_current_network_id()));
       } else {
+        WP_CLI::debug("getting blog IDs with select-statement");
+
         $site_ids = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs WHERE site_id = $wpdb->siteid;");
       }
 
@@ -273,22 +320,39 @@ class S3Migration_Command
     return $blog_IDs;
   }
 
+  /**
+   * 
+   * @param int $blogID id of the blog
+   */
   private function switchSiteContext(int $blogID)
   {
     if (is_multisite() === true) {
-      $this->switch_to_blog($blogID);
+      switch_to_blog($blogID);
       WP_CLI::success("Swtiched site id to " . $blogID);
     } else {
       WP_CLI::log("No multisite -> no switch necessary.");
     }
   }
 
+  /**
+   * 
+   */
   private function resetContext()
   {
     WP_CLI::debug("restoring blog...");
     restore_current_blog(); //WP function
   }
 
+  /**
+   * 
+   * @param $type
+   * @param string $table
+   * @param string $local_uri
+   * @param string $aws_uri
+   * @param bool $revert
+   * 
+   * @return string update statement
+   */
   private function updatePostContent($type, $table, $local_uri, $aws_uri, $revert = false)
   {
     $from = (!$revert) ? $local_uri : $aws_uri;
