@@ -57,8 +57,6 @@ class S3Migration_Command
 
     $this->doPrechecks();
 
-    WP_CLI::debug("Starting migration to S3");
-
     //get input args
     $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
     $output = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
@@ -83,9 +81,12 @@ class S3Migration_Command
     WP_CLI::debug("Protocol is: " . $protocol);
 
     //run migration for each blog
+    WP_CLI::debug("Starting migration to S3");
     foreach ($siteIDs as $id) {
       $this->runMigration($id, $protocol);
     }
+
+    WP_CLI::success("Migration done!");
   }
 
   /**
@@ -163,6 +164,8 @@ class S3Migration_Command
 
     //finally reset context
     $this->resetContext();
+
+    WP_CLI::log("Migration done for site ID " . $siteID);
   }
 
   /**
