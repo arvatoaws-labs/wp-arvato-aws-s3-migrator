@@ -286,7 +286,7 @@ class S3Migration_Command
   private function resetContext()
   {
     WP_CLI::debug("restoring blog...");
-    $this->restore_current_blog();
+    restore_current_blog(); //WP function
   }
 
   private function updatePostContent($type, $table, $local_uri, $aws_uri, $revert = false)
