@@ -264,27 +264,28 @@ class S3Migration_Command
     global $wpdb;
 
     $wp_folder_prefix = $this->getWPFolderPrefix();
-    WP_CLI::debug("WP Folder Prefix is: " . $wp_folder_prefix);
+    WP_CLI::debug("WP Folder Prefix: " . $wp_folder_prefix);
 
     $aws_url = $this->getAWSURL();
     $aws_folder_prefix = $this->getAWSFolderPrefix();
-    WP_CLI::debug("AWS Folder Prefix is: " . $aws_folder_prefix);
+    WP_CLI::debug("AWS Folder Prefix: " . $aws_folder_prefix);
 
     if ($db_connection = mysqli_connect($wpdb->dbhost, $wpdb->dbuser, $wpdb->dbpassword, $wpdb->dbname)) {
       // Query to update post content 'href'
-      WP_CLI::debug("Site-URL: " . get_site_url($wpdb->blogid));
+     
+      WP_CLI::debug("Site-URL: " . get_site_url(get_current_blog_id()) );
 
       $query_post_content_href = $this->updatePostContent(
         'href',
         $wpdb->posts,
-        get_site_url($wpdb->blogid) . '/' . $wp_folder_prefix,
+        get_site_url(get_current_blog_id()) . '/' . $wp_folder_prefix,
         "$protocol$aws_url/$aws_folder_prefix"
       );
       // Query to update post content 'src'
       $query_post_content_src = $this->updatePostContent(
         'src',
         $wpdb->posts,
-        get_site_url($wpdb->blogid) . '/' . $wp_folder_prefix,
+        get_site_url(get_current_blog_id()) . '/' . $wp_folder_prefix,
         "$protocol$aws_url/$aws_folder_prefix"
       );
 
@@ -325,12 +326,10 @@ class S3Migration_Command
 
     $blog_IDs = array(get_current_blog_id());
 
-    // multisite check
-    $isMultisite = is_multisite();
     // $multiSite_Txt = ($isMultisite === true) ? "YES" : "NO";
-    WP_CLI::success("Is Multisite: " . json_encode($isMultisite));
+    WP_CLI::success("Is Multisite: " . json_encode(is_multisite()));
 
-    if ($isMultisite === true) {
+    if (is_multisite() === true) {
 
       if (function_exists('get_sites') && function_exists('get_current_network_id')) {
         WP_CLI::debug("getting blog IDs with WP-function");
@@ -362,6 +361,7 @@ class S3Migration_Command
     } else {
       WP_CLI::log("No multisite -> no switch necessary.");
     }
+    WP_CLI::debug("Current Blog-ID: ". get_current_blog_id());
   }
 
   /**
