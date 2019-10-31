@@ -9,7 +9,7 @@ class S3Migration_Command
   private $S3validationDone = false;
 
   /**
-   * 
+   * @return void
    */
   private function doPrechecks()
   {
@@ -94,6 +94,7 @@ class S3Migration_Command
   }
 
   /**
+   * Build up the S3-object 
    * 
    * @return object
    */
@@ -112,10 +113,12 @@ class S3Migration_Command
   }
 
   /**
+   * Valdiates the S3-object. 
+   * Returns always true. If validation fails, the function will break with an WP_CLI::error().
    * 
    * @param object $s3
    * 
-   * @return bool true
+   * @return bool true  allawys returns true
    */
   private function validateS3Object(object $s3)
   {
@@ -134,6 +137,7 @@ class S3Migration_Command
   }
 
   /**
+   * Gets the name of the s3-bucket 
    * 
    * @return string bucket name
    */
@@ -146,7 +150,7 @@ class S3Migration_Command
 
   /**
    * 
-   * @return string s3-region
+   * @return string S3-Region
    */
   private function getS3Region()
   {
@@ -156,7 +160,9 @@ class S3Migration_Command
   }
 
   /**
-   * @return string
+   * Gets the acutal configured AWS S3 URL
+   * 
+   * @return string AWS URL
    */
   private function getAWSURL()
   {
@@ -181,6 +187,8 @@ class S3Migration_Command
    * @param int $siteID
    * @param string $protocol
    * 
+   * @return void
+   * 
    */
   private function runMigration(int $siteID, string $protocol)
   {
@@ -202,6 +210,8 @@ class S3Migration_Command
    *  
    * @param int $siteID
    * @param bool $output
+   * 
+   * @return void
    */
   private function purge(int $siteID, bool $output)
   {
@@ -228,7 +238,7 @@ class S3Migration_Command
   }
 
   /**
-   * 
+   * @return void
    */
   private function performUpdateMetadata()
   {
@@ -258,6 +268,8 @@ class S3Migration_Command
   /**
    * 
    * @param string $protocol
+   * 
+   * @return void
    */
   private function performRewritePostContent(string $protocol)
   {
@@ -272,8 +284,8 @@ class S3Migration_Command
 
     if ($db_connection = mysqli_connect($wpdb->dbhost, $wpdb->dbuser, $wpdb->dbpassword, $wpdb->dbname)) {
       // Query to update post content 'href'
-     
-      WP_CLI::debug("Site-URL: " . get_site_url(get_current_blog_id()) );
+
+      WP_CLI::debug("Site-URL: " . get_site_url(get_current_blog_id()));
 
       $query_post_content_href = $this->updatePostContent(
         'href',
@@ -298,7 +310,7 @@ class S3Migration_Command
   }
 
   /**
-   * 
+   * @return string
    */
   private function getWPFolderPrefix()
   {
@@ -307,6 +319,8 @@ class S3Migration_Command
 
   /**
    * 
+   * 
+   * @return string
    */
   private function getAWSFolderPrefix()
   {
@@ -322,26 +336,13 @@ class S3Migration_Command
    */
   private function getAllSiteIDs()
   {
-    global $wpdb;
-
+    //initalize with the current id (in case of no multisite)
     $blog_IDs = array(get_current_blog_id());
 
-    // $multiSite_Txt = ($isMultisite === true) ? "YES" : "NO";
     WP_CLI::success("Is Multisite: " . json_encode(is_multisite()));
 
     if (is_multisite() === true) {
-
-      if (function_exists('get_sites') && function_exists('get_current_network_id')) {
-        WP_CLI::debug("getting blog IDs with WP-function");
-
-        $site_ids = get_sites(array('fields' => 'ids', 'network_id' => get_current_network_id()));
-      } else {
-        WP_CLI::debug("getting blog IDs with select-statement");
-
-        $site_ids = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs WHERE site_id = $wpdb->siteid;");
-      }
-
-      $blog_IDs = array_merge($blog_IDs, $site_ids);
+      $blog_IDs = array_merge($blog_IDs, $this->getMultisiteIDs());
     }
 
     WP_CLI::debug("Found " . count($blog_IDs) . " site ids");
@@ -350,8 +351,35 @@ class S3Migration_Command
   }
 
   /**
+   * Get all site IDs from the multisite configuration
+   * 
+   * @global $wpdb
+   * 
+   * @return array
+   */
+  private function getMultisiteIDs()
+  {
+    global $wpdb;
+
+    if (function_exists('get_sites') && function_exists('get_current_network_id')) {
+      WP_CLI::debug("getting blog IDs with WP-function");
+
+      $site_ids = get_sites(array('fields' => 'ids', 'network_id' => get_current_network_id()));
+    } else {
+      WP_CLI::debug("getting blog IDs with select-statement");
+
+      $site_ids = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs WHERE site_id = $wpdb->siteid;");
+    }
+
+    return $site_ids;
+  }
+
+  /**
+   * Switch the context of WP so that $wpdb works for the given blog
    * 
    * @param int $blogID id of the blog
+   * 
+   * @return void
    */
   private function switchSiteContext(int $blogID)
   {
@@ -361,23 +389,24 @@ class S3Migration_Command
     } else {
       WP_CLI::log("No multisite -> no switch necessary.");
     }
-    WP_CLI::debug("Current Blog-ID: ". get_current_blog_id());
+    WP_CLI::debug("Current Blog-ID: " . get_current_blog_id());
   }
 
   /**
-   * 
+   * @return void
    */
   private function resetContext()
   {
     WP_CLI::debug("restoring blog...");
     if (is_multisite()) {
-      restore_current_blog(); //WP function
+      restore_current_blog();
     } else {
       WP_CLI::debug("No multisite - no restore needed");
     }
   }
 
   /**
+   * Build the update statement to replace the URI in the postcontent
    * 
    * @param string $type
    * @param string $table
