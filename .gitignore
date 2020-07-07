@@ -9,3 +9,4 @@ composer.lock
 phpunit.xml
 phpcs.xml
 *.log
+wp-content/

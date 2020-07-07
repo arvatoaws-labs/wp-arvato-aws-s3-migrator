@@ -6,8 +6,8 @@
     "license": "MIT",
     "authors": [
       {
-        "name": "Sebastian Tietz",
-        "email": "sebastian.tietz@bertelsmann.de",
+        "name": "Arvato Systems AWS Business Group",
+        "email": "aws@bertelsmann.de",
         "homepage": "https://www.arvato-systems.de/aws"
       }
     ],
@@ -16,9 +16,11 @@
         "files": [ "command.php" ]
     },
     "require": {
+        "composer/installers": "^1.8",
         "wp-cli/wp-cli": "^2.3.0"
     },
     "require-dev": {
-        "behat/behat": "~2.5"
+        "behat/behat": "~2.5",
+        "deliciousbrains/wp-amazon-s3-and-cloudfront": "^2.3"
     }
 }
