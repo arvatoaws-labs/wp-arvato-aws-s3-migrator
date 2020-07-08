@@ -7,9 +7,40 @@ arvatoaws-labs/wp-arvato-aws-s3-migrator
 
 Quick links: [Using](#using) | [Installing](#installing) | [Contributing](#contributing) | [Support](#support)
 
+***
+
+
+***HINT:*** This plugin will __not__ copy your files from local storage to AWS S3!
+
 ## Using
 
+Simple run the script with the following command
 
+    wp aws-s3-migrate
+
+### Options
+
+#### Output
+
+This will add an extra table with information about the migrated post Ids and with id the new entry in the AS3CF table `<prefix>_as3cf_items` or `false` if a WP_ERROR was thrown while saving.
+
+    wp aws-s3-migrate --output
+
+##### Example table output
+```bash
++--------+-------+
+| PostId | AS3CF |
++--------+-------+
+|   23   |  12   |
++--------+-------+
+|   49   | false | <-- something went wrong
++--------+-------+
+```
+#### Debug
+
+Starts WP-CLI in debug mode. This will add additional debug statements to the console output.
+
+    wp aws-s3-migrate --debug
 
 ## Installing
 
@@ -17,7 +48,13 @@ Installing this package requires WP-CLI v1.1.0 or greater. Update to the latest 
 
 Once you've done so, you can install this package with:
 
-    wp package install git@github.com:arvatoaws-labs/wp-arvato-aws-s3-migrator.git
+    wp package install arvatoaws-labs/wp-arvato-aws-s3-migrator
+
+  ... or with a specified version:
+
+    wp package install arvatoaws-labs/wp-arvato-aws-s3-migrator:<VersionTag>
+
+    wp package install arvatoaws-labs/wp-arvato-aws-s3-migrator:2.3.0
 
 ## Contributing
 
