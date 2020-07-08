@@ -1,7 +1,7 @@
 <?php
 
+use DeliciousBrains\WP_Offload_Media\Items\Item as Item;
 use DeliciousBrains\WP_Offload_Media\Items\Media_Library_Item as Media_Library_Item;
-// use WP_CLI;
 
 class S3Migration_Command
 {
@@ -9,8 +9,7 @@ class S3Migration_Command
   /** @var string $PLUGIN_MIN_VERSION */
   private static $PLUGIN_MIN_VERSION = "2.3";
 
-  private static $IS_DEBUG_MODE = false;
-
+  /** @var bool $OUTPUT */
   private static $OUTPUT = false;
 
   /**
@@ -52,7 +51,7 @@ class S3Migration_Command
 
 
   /**
-   * Starts S3 migration
+   * Starts S3 database migration
    * 
    * ## OPTIONS
    * 
@@ -60,7 +59,7 @@ class S3Migration_Command
    * : Display a detailed log of all migrated files
    * 
    * [--purge]
-   * : Purges the postmeta table for all entries with 'amazonS3_info'
+   * : Purges the as3cf_items table before start a migration run
    * 
    * 
    * ## EXAMPLES
@@ -81,22 +80,16 @@ class S3Migration_Command
     WP_CLI::warning('Starting WP MediaLibrary migration');
 
     //get input args
-    // $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
     self::$OUTPUT = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
-
-    self::$IS_DEBUG_MODE = WP_CLI::get_config('debug');
- 
 
     if ($purge === true) {
 
       $this->purge();
-      // WP_CLI::halt(0); //stop processing with exit code 0 = success
-      // return;
+      
     }
 
     $this->runMigration();
-
 
     WP_CLI::success("Migration done!");
   }
@@ -104,7 +97,10 @@ class S3Migration_Command
  
 
   /**
+   * Wrapper function for Media_Library_Item - Triggers the migration itself
    * 
+   * @return int|bool - `int` new id of the item in as3cf_items; - 
+   *                  -`false` if there is an error
    */
   private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $private_sizes = array(), $id = null)
   {
@@ -136,7 +132,7 @@ class S3Migration_Command
   }
 
   /**
-   * 
+   * Do the migration 
    * 
    * @return void
    * 
@@ -238,35 +234,37 @@ class S3Migration_Command
   }
 
   /**
-   * Remove all entries from 'postmeta' table with meta_key 'amazonS3_info'
+   * Remove all entries from 'as3cf_items' table
    *  
    * @param bool $output
    * 
    * @return void
    */
-  private function purge(bool $output)
+  private function purge()
   {
-    WP_CLI::warning("Purging postmeta table");
+    /**
+     * @global wpdb $wpdb
+     */
+    global $wpdb;
+       
+    $tableName = $this->getTableName();
+    $delete = $wpdb->query("TRUNCATE TABLE $tableName");
+ 
+    WP_CLI::success("Purging finished!");
+  }
 
-    WP_CLI::warning("Purging postmeta table");
-    WP_CLI::warning("Purging postmeta table");
-    WP_CLI::warning("Purging postmeta table");
-
-    //@todo add detailed logging
-
+  /**
+   * Get the table name
+   * 
+   * @return string name of the as3cf_items table (including table prefix)
+   */
+  private function getTableName(){
     /**
      * @global wpdb $wpdb
      */
     global $wpdb;
 
-    $wpdb->delete(
-      $wpdb->postmeta,
-      array(
-        'meta_key' => 'amazonS3_info',
-      )
-    );
-
-    WP_CLI::success("Purging done!");
+    return $wpdb->get_blog_prefix() . Item::ITEMS_TABLE;
   }
 
 }
