@@ -1,29 +1,55 @@
 <?php
 
+use DeliciousBrains\WP_Offload_Media\Items\Media_Library_Item as Media_Library_Item;
+// use WP_CLI;
 
 class S3Migration_Command
 {
-  /**
-   * @var bool
-   */
-  private $S3validationDone = false;
+
+  /** @var string $PLUGIN_MIN_VERSION */
+  private static $PLUGIN_MIN_VERSION = "2.3";
+
+  private static $IS_DEBUG_MODE = false;
+
+  private static $OUTPUT = false;
 
   /**
    * @return void
    */
   private function doPrechecks()
   {
-
+    //Check if WP CLI is started from command line
     if (php_sapi_name() != 'cli') {
       WP_CLI::error("This script must run from CLI");
-      WP_CLI::hast(2);
+      WP_CLI::halt(2);
     }
 
-    if (!class_exists('Amazon_S3_And_CloudFront')) {
+    //Is AS3CF Plugin active?
+    $options = array(
+      'return'     => true,   // Return 'STDOUT'; use 'all' for full object.
+      'parse'      => 'json', // Parse captured STDOUT to JSON array.
+      'launch'     => false,  // Reuse the current process.
+      'exit_error' => true,   // Halt script execution on error.
+    );
+    $plugin = WP_CLI::runcommand('plugin get amazon-s3-and-cloudfront --format=json', $options);
+
+    if ($plugin['status'] !== 'active') {
       WP_CLI::error("WP Offload Media Lite plugin is not active!");
+      WP_CLI::error($plugin);
+      WP_CLI::halt(1);
+    }
+
+    //Is AS3CF installed in a valid version?
+    $pluginVersion = $GLOBALS['aws_meta']['amazon-s3-and-cloudfront']['version'];
+    WP_CLI::log("Installed AS3CF-Plugin Version: " . $pluginVersion);
+
+    if ($pluginVersion < self::$PLUGIN_MIN_VERSION) {
+      WP_CLI::error("AS3CF-Plugin version has to be at least " . self::$PLUGIN_MIN_VERSION . "!");
       WP_CLI::halt(1);
     }
   }
+
+
 
   /**
    * Starts S3 migration
@@ -36,21 +62,12 @@ class S3Migration_Command
    * [--purge]
    * : Purges the postmeta table for all entries with 'amazonS3_info'
    * 
-   * [--protocol=<protocol>]
-   * default: https
-   * ---
-   * options:
-   *   - https
-   *   - http
-   * ---
    * 
    * ## EXAMPLES
    * 
    *    wp aws-s3-migrate
    * 
    *    wp aws-s3-migrate --output
-   * 
-   *    wp aws-s3-migrate --protocl=http 
    * 
    *    wp aws-s3-migrate --purge
    * 
@@ -61,163 +78,180 @@ class S3Migration_Command
 
     $this->doPrechecks();
 
+    WP_CLI::warning('Starting WP MediaLibrary migration');
+
     //get input args
-    $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
-    $output = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
+    // $protocol = WP_CLI\Utils\get_flag_value($assoc_args, 'protocol', 'https');
+    self::$OUTPUT = WP_CLI\Utils\get_flag_value($assoc_args, 'output', false);
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
-    WP_CLI::debug("Inputs: Protocol=" . json_encode($protocol) . " / Output=" . json_encode($output) . " / Purge=" . json_encode($purge));
-
-    $siteIDs = $this->getAllSiteIDs();
+    self::$IS_DEBUG_MODE = WP_CLI::get_config('debug');
+ 
 
     if ($purge === true) {
 
-      foreach ($siteIDs as $id) {
-        $this->purge($id, $output);
-      }
-
-
+      $this->purge();
       // WP_CLI::halt(0); //stop processing with exit code 0 = success
       // return;
     }
 
-    $protocol = $protocol . "://";
-    WP_CLI::debug("Protocol is: " . $protocol);
+    $this->runMigration();
 
-    //run migration for each blog
-    WP_CLI::debug("Starting migration to S3");
-    foreach ($siteIDs as $id) {
-      $this->runMigration($id, $protocol);
-    }
 
     WP_CLI::success("Migration done!");
   }
 
-  /**
-   * Build up the S3-object 
-   * 
-   * @return object
-   */
-  private function getS3Object()
-  {
-    $s3 = new stdClass();
-    $s3->region = $this->getS3Region();
-    $s3->bucket = $this->getS3Bucket();
-
-    //validate object on first GET
-    if (!$this->S3validationDone) {
-      $this->validateS3Object($s3);
-    }
-
-    return $s3;
-  }
-
-  /**
-   * Valdiates the S3-object. 
-   * Returns always true. If validation fails, the function will break with an WP_CLI::error().
-   * 
-   * @param object $s3
-   * 
-   * @return bool true  allawys returns true
-   */
-  private function validateS3Object(object $s3)
-  {
-
-    if (!$s3->bucket || !$s3->region) {
-      WP_CLI::error("WP Offload S3 Lite setup  appears to be incomplete.");
-      WP_CLI::halt(1);
-    }
-
-    $this->S3validationDone = true;
-
-    WP_CLI::debug("S3-Region: " .  $s3->region);
-    WP_CLI::debug("S3-Bucket: " .  $s3->bucket);
-
-    return true;
-  }
-
-  /**
-   * Gets the name of the s3-bucket 
-   * 
-   * @return string bucket name
-   */
-  private function getS3Bucket()
-  {
-    global $as3cf;
-
-    return $as3cf->get_setting('bucket');
-  }
+ 
 
   /**
    * 
-   * @return string S3-Region
    */
-  private function getS3Region()
+  private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $private_sizes = array(), $id = null)
   {
-    global $as3cf;
 
-    return ($as3cf->get_setting('region')) ? $as3cf->get_setting('region') : $as3cf->get_bucket_region($as3cf->get_setting('bucket'));
-  }
+    $migratedItem = new Media_Library_Item(
+      $provider,
+      $region,
+      $bucket,
+      $path,
+      $is_private,
+      $source_id,
+      $source_path,
+      $original_filename,
+      $private_sizes
+    );
 
-  /**
-   * Gets the acutal configured AWS S3 URL
-   * 
-   * @return string AWS URL
-   */
-  private function getAWSURL()
-  {
-    global $as3cf;
+    $result = $migratedItem->save();
 
-    $s3 = $this->getS3Object();
-
-    if ($as3cf->get_setting('domain') === "cloudfront" && $as3cf->get_setting('cloudfront')) {
-      $aws_url = $as3cf->get_setting('cloudfront');
+    if (is_wp_error($result)) {
+      WP_CLI::error('FAIL');
+      WP_CLI::error($result->get_error_message());
+      return false;
     } else {
-      $aws_url = 's3-' . $s3->region . '.amazonaws.com/' . $as3cf->get_setting('bucket');
+      WP_CLI::debug('saved', "PostId-" . $source_id);
+      WP_CLI::debug("Item saved to new Id " . $result, "PostId-" . $source_id);
     }
 
-    WP_CLI::debug("AWS URL: " . $aws_url);
-
-    return $aws_url;
+    return $result;
   }
 
   /**
    * 
-   * 
-   * @param int $siteID
-   * @param string $protocol
    * 
    * @return void
    * 
    */
-  private function runMigration(int $siteID, string $protocol)
+  private function runMigration()
   {
-    WP_CLI::log("Starting migration for site ID " . $siteID);
-    $this->switchSiteContext($siteID);
+    /** @var Amazon_S3_And_CloudFront $as3cf */
+    global $as3cf;
 
-    $this->performUpdateMetadata();
 
-    $this->performRewritePostContent($protocol);
+    $count = Media_Library_Item::count_attachments(true, true);
+    WP_CLI::log("Not offloaded attachments: " . $count['not_offloaded']);
 
-    //finally reset context
-    $this->resetContext();
+    $notOffloadedIds = Media_Library_Item::get_missing_source_ids(null, $count['not_offloaded']);
 
-    WP_CLI::log("Migration done for site ID " . $siteID);
+    WP_CLI::debug("IDs of not offloaded Attachments:");
+    $progress = WP_CLI\Utils\make_progress_bar('Migrating attachments', count($notOffloadedIds));
+
+    $items = array();
+    foreach ($notOffloadedIds as $index => $postId) {
+      WP_CLI::debug("PostID: " .  $postId, "PostId-" . $postId);
+
+      //check if there are already amazon_s3_info meta_data
+      $old_item = Media_Library_Item::get_by_source_id($postId);
+
+      if ($old_item === false) {
+        WP_CLI::debug("Item has no legacy entries in post_meta", "PostId-" . $postId);
+
+        $attachment = wp_get_attachment_metadata($postId);
+
+        $settings = $as3cf->get_settings();
+
+        $result = $this->migrateItem(
+          $settings['provider'],
+          $settings['region'],
+          $settings['bucket'],
+          path_join($settings['object-prefix'], $attachment['file']), 
+          false, 
+          $postId,
+          $attachment['file'], 
+          $attachment['file'] 
+
+        );
+
+      } else {
+
+        WP_CLI::debug("Found legacy infos in post_meta", "PostId-" . $postId);
+
+        $result = $this->migrateItem(
+          $old_item->provider(),
+          $old_item->region(),
+          $old_item->bucket(),
+          $old_item->path(),
+          $old_item->is_private(),
+          $postId,
+          $old_item->source_path(),
+          wp_basename($old_item->original_source_path()),
+          $old_item->private_sizes()
+        );
+      }
+
+      array_push($items, array('PostId' => $postId, 'AS3CF' => $result));
+
+      $progress->tick();
+    }
+
+    $progress->finish();
+
+    //print additional output to console
+    if(self::$OUTPUT === true) {
+      $this->printResultTable($items);
+    }
+  }
+
+
+  /**
+   * Prints a final table with all migratetd items
+   * 
+   *  * ```
+   * Example output
+   *
+   * # +--------+-------+
+   * # | PostId | AS3CF |
+   * # +--------+-------+
+   * # |   23   |  12   |
+   * # +--------+-------+
+   * # |   49   | false |
+   * # +--------+-------+
+   * ```
+   * 
+   * @param array $items
+   * @param array $header
+   * 
+   * @return void
+   */
+  private function printResultTable(array $items, array $header = array( 'PostId', 'AS3CF'))
+  {
+    WP_CLI\Utils\format_items('table', $items, $header);
   }
 
   /**
    * Remove all entries from 'postmeta' table with meta_key 'amazonS3_info'
    *  
-   * @param int $siteID
    * @param bool $output
    * 
    * @return void
    */
-  private function purge(int $siteID, bool $output)
+  private function purge(bool $output)
   {
-    WP_CLI::info("Purging postmeta table for Blog-ID: " . $siteID);
+    WP_CLI::warning("Purging postmeta table");
 
-    $this->switchSiteContext($siteID);
+    WP_CLI::warning("Purging postmeta table");
+    WP_CLI::warning("Purging postmeta table");
+    WP_CLI::warning("Purging postmeta table");
+
     //@todo add detailed logging
 
     /**
@@ -232,201 +266,9 @@ class S3Migration_Command
       )
     );
 
-    $this->resetContext();
-
     WP_CLI::success("Purging done!");
   }
 
-  /**
-   * @return void
-   */
-  private function performUpdateMetadata()
-  {
-    global $wpdb;
-
-    $s3 = $this->getS3Object();
-
-    $media_to_update = $wpdb->get_results("SELECT * FROM " . $wpdb->postmeta . " WHERE meta_key = '_wp_attached_file'");
-
-    WP_CLI::debug("Media_to_update Size: " . count($media_to_update));
-
-    // loop through each media item, adding the amazonS3_info metadata
-    foreach ($media_to_update as $media_item) {
-
-      $mediaMetaData = array(
-        'bucket'   => $s3->bucket,
-        'key'      => $this->getAWSFolderPrefix() . $media_item->meta_value,
-        'region'   => $s3->region,
-        'provider' => 'aws'
-      );
-
-      // Upsert the postmeta record that WP Offload S3 Lite uses
-      update_post_meta($media_item->post_id, 'amazonS3_info', $mediaMetaData);
-    }
-  }
-
-  /**
-   * 
-   * @param string $protocol
-   * 
-   * @return void
-   */
-  private function performRewritePostContent(string $protocol)
-  {
-    global $wpdb;
-
-    $wp_folder_prefix = $this->getWPFolderPrefix();
-    WP_CLI::debug("WP Folder Prefix: " . $wp_folder_prefix);
-
-    $aws_url = $this->getAWSURL();
-    $aws_folder_prefix = $this->getAWSFolderPrefix();
-    WP_CLI::debug("AWS Folder Prefix: " . $aws_folder_prefix);
-
-    if ($db_connection = mysqli_connect($wpdb->dbhost, $wpdb->dbuser, $wpdb->dbpassword, $wpdb->dbname)) {
-      // Query to update post content 'href'
-
-      WP_CLI::debug("Site-URL: " . get_site_url(get_current_blog_id()));
-
-      $query_post_content_href = $this->updatePostContent(
-        'href',
-        $wpdb->posts,
-        get_site_url(get_current_blog_id()) . '/' . $wp_folder_prefix,
-        "$protocol$aws_url/$aws_folder_prefix"
-      );
-      // Query to update post content 'src'
-      $query_post_content_src = $this->updatePostContent(
-        'src',
-        $wpdb->posts,
-        get_site_url(get_current_blog_id()) . '/' . $wp_folder_prefix,
-        "$protocol$aws_url/$aws_folder_prefix"
-      );
-
-      $db_connection->query($query_post_content_href);
-      $db_connection->query($query_post_content_src);
-    } else {
-      WP_CLI::error("DB Connection failed!");
-      WP_CLI::halt(1);
-    }
-  }
-
-  /**
-   * @return string
-   */
-  private function getWPFolderPrefix()
-  {
-    return str_replace(ABSPATH, '', wp_upload_dir()['basedir']) . '/';
-  }
-
-  /**
-   * 
-   * 
-   * @return string
-   */
-  private function getAWSFolderPrefix()
-  {
-    global $as3cf;
-
-    return $as3cf->get_setting('enable-object-prefix') ? $as3cf->get_setting('object-prefix') : $this->getWPFolderPrefix();
-  }
-
-  /**
-   * Get all IDs of the blog(s). 
-   * 
-   * @return array Array with blog ids
-   */
-  private function getAllSiteIDs()
-  {
-    //initalize with the current id (in case of no multisite)
-    $blog_IDs = array(get_current_blog_id());
-
-    WP_CLI::success("Is Multisite: " . json_encode(is_multisite()));
-
-    if (is_multisite() === true) {
-      $blog_IDs = array_merge($blog_IDs, $this->getMultisiteIDs());
-    }
-
-    WP_CLI::debug("Found " . count($blog_IDs) . " site ids");
-
-    return $blog_IDs;
-  }
-
-  /**
-   * Get all site IDs from the multisite configuration
-   * 
-   * @global $wpdb
-   * 
-   * @return array
-   */
-  private function getMultisiteIDs()
-  {
-    global $wpdb;
-
-    if (function_exists('get_sites') && function_exists('get_current_network_id')) {
-      WP_CLI::debug("getting blog IDs with WP-function");
-
-      $site_ids = get_sites(array('fields' => 'ids', 'network_id' => get_current_network_id()));
-    } else {
-      WP_CLI::debug("getting blog IDs with select-statement");
-
-      $site_ids = $wpdb->get_col("SELECT blog_id FROM $wpdb->blogs WHERE site_id = $wpdb->siteid;");
-    }
-
-    return $site_ids;
-  }
-
-  /**
-   * Switch the context of WP so that $wpdb works for the given blog
-   * 
-   * @param int $blogID id of the blog
-   * 
-   * @return void
-   */
-  private function switchSiteContext(int $blogID)
-  {
-    if (is_multisite() === true) {
-      switch_to_blog($blogID);
-      WP_CLI::success("Swtiched site id to " . $blogID);
-    } else {
-      WP_CLI::log("No multisite -> no switch necessary.");
-    }
-    WP_CLI::debug("Current Blog-ID: " . get_current_blog_id());
-  }
-
-  /**
-   * @return void
-   */
-  private function resetContext()
-  {
-    WP_CLI::debug("restoring blog...");
-    if (is_multisite()) {
-      restore_current_blog();
-    } else {
-      WP_CLI::debug("No multisite - no restore needed");
-    }
-  }
-
-  /**
-   * Build the update statement to replace the URI in the postcontent
-   * 
-   * @param string $type
-   * @param string $table
-   * @param string $local_uri
-   * @param string $aws_uri
-   * @param bool $revert
-   * 
-   * @return string update statement
-   */
-  private function updatePostContent(string $type, string $table, string $local_uri, string $aws_uri, $revert = false)
-  {
-    $from = (!$revert) ? $local_uri : $aws_uri;
-    $to   = (!$revert) ? $aws_uri : $local_uri;
-
-    WP_CLI::debug("UpdatePostContent 'TABLE': " . $table);
-    WP_CLI::debug("UpdatePostContent 'FROM': " . $from);
-    WP_CLI::debug("UpdatePostContent 'TO': " . $to);
-
-    return "UPDATE $table SET post_content = replace(post_content, '$type=\"$from', '$type=\"$to');";
-  }
 }
 
 WP_CLI::add_command('aws-s3-migrate', 'S3Migration_Command');
