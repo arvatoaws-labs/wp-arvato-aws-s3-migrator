@@ -156,12 +156,19 @@ class S3Migration_Command
       WP_CLI::debug("PostID: " .  $postId, "PostId-" . $postId);
 
       //check if there are already amazon_s3_info meta_data
-      $old_item = Media_Library_Item::get_by_source_id($postId);
+      $existring_item = Media_Library_Item::get_by_source_id($postId);
 
-      if ($old_item === false) {
+      if ($existring_item === false) {
         WP_CLI::debug("Item has no legacy entries in post_meta", "PostId-" . $postId);
 
         $attachment = wp_get_attachment_metadata($postId);
+
+        if(false === $attachment) {
+          WP_CLI::warning("No attachment data found - skipping");
+          array_push($items, array('PostId' => $postId, 'AS3CF' => false));
+
+          continue;
+        }
 
         $settings = $as3cf->get_settings();
 
@@ -173,8 +180,7 @@ class S3Migration_Command
           false, 
           $postId,
           $attachment['file'], 
-          $attachment['file'] 
-
+          $attachment['file']
         );
 
       } else {
@@ -182,15 +188,15 @@ class S3Migration_Command
         WP_CLI::debug("Found legacy infos in post_meta", "PostId-" . $postId);
 
         $result = $this->migrateItem(
-          $old_item->provider(),
-          $old_item->region(),
-          $old_item->bucket(),
-          $old_item->path(),
-          $old_item->is_private(),
+          $existring_item->provider(),
+          $existring_item->region(),
+          $existring_item->bucket(),
+          $existring_item->path(),
+          $existring_item->is_private(),
           $postId,
-          $old_item->source_path(),
-          wp_basename($old_item->original_source_path()),
-          $old_item->private_sizes()
+          $existring_item->source_path(),
+          wp_basename($existring_item->original_source_path()),
+          $existring_item->private_sizes()
         );
       }
 
