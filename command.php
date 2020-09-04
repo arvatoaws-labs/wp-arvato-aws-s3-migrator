@@ -1,5 +1,5 @@
 <?php
-
+//tes
 use DeliciousBrains\WP_Offload_Media\Items\Item as Item;
 use DeliciousBrains\WP_Offload_Media\Items\Media_Library_Item as Media_Library_Item;
 
@@ -17,6 +17,7 @@ class S3Migration_Command
    */
   private function doPrechecks()
   {
+    WP_CLI::debug("Starting prechecks");
     //Check if WP CLI is started from command line
     if (php_sapi_name() != 'cli') {
       WP_CLI::error("This script must run from CLI");
@@ -27,15 +28,27 @@ class S3Migration_Command
     $options = array(
       'return'     => true,   // Return 'STDOUT'; use 'all' for full object.
       'parse'      => 'json', // Parse captured STDOUT to JSON array.
-      'launch'     => false,  // Reuse the current process.
+      'launch'     => true,  // Reuse the current process.
       'exit_error' => true,   // Halt script execution on error.
     );
-    $plugin = WP_CLI::runcommand('plugin get amazon-s3-and-cloudfront --format=json', $options);
+
+    try {
+
+      $plugin = WP_CLI::runcommand('plugin get amazon-s3-and-cloudfront --format=json', $options);
+      
+    } catch (Exception $e) {
+      WP_CLI::error("RUN Command Error: ". $e->getMessage() );
+      WP_CLI::halt(1);
+    }
+
+   
 
     if ($plugin['status'] !== 'active') {
       WP_CLI::error("WP Offload Media Lite plugin is not active!");
       WP_CLI::error($plugin);
       WP_CLI::halt(1);
+    } else {
+      WP_CLI::success("Offloading Plugin is active");
     }
 
     //Is AS3CF installed in a valid version?
@@ -74,6 +87,7 @@ class S3Migration_Command
    */
   public function __invoke($args, $assoc_args)
   {
+    WP_CLI::debug('RUNNING');
 
     $this->doPrechecks();
 
@@ -151,6 +165,9 @@ class S3Migration_Command
     WP_CLI::debug("IDs of not offloaded Attachments:");
     $progress = WP_CLI\Utils\make_progress_bar('Migrating attachments', count($notOffloadedIds));
 
+    $settings = $as3cf->get_settings(true);
+    WP_CLI::debug(print_r($settings));
+
     $items = array();
     foreach ($notOffloadedIds as $index => $postId) {
       WP_CLI::debug("PostID: " .  $postId, "PostId-" . $postId);
@@ -170,11 +187,20 @@ class S3Migration_Command
           continue;
         }
 
-        $settings = $as3cf->get_settings();
+        if( !isset($attachment['file']) ){
+          //maybe some video files dont have 'file' entries -> read from postmeta
+          WP_CLI::debug("Reading filename from post_meta 'attached_file'", "PostId-" . $postId);
+          
+          $attachment['file'] = basename(get_attached_file($postId));
+
+          WP_CLI::debug("Filename: " . $attachment['file'], "PostId-" . $postId);
+        }
+
+        
 
         $result = $this->migrateItem(
-          $settings['provider'],
-          $settings['region'],
+          $settings['provider'], 
+          $settings['region'], 
           $settings['bucket'],
           path_join($settings['object-prefix'], $attachment['file']), 
           false, 
@@ -271,6 +297,10 @@ class S3Migration_Command
     global $wpdb;
 
     return $wpdb->get_blog_prefix() . Item::ITEMS_TABLE;
+  }
+
+  private function getAS3CFSettings(){
+
   }
 
 }
