@@ -166,7 +166,7 @@ class S3Migration_Command
     $progress = WP_CLI\Utils\make_progress_bar('Migrating attachments', count($notOffloadedIds));
 
     $settings = $as3cf->get_settings(true);
-    WP_CLI::debug(print_r($settings));
+    WP_CLI::debug(print_r($settings,true));
 
     $items = array();
     foreach ($notOffloadedIds as $index => $postId) {
