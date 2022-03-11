@@ -157,7 +157,7 @@ class S3Migration_Command
     global $as3cf;
 
 
-    $count = Media_Library_Item::count_attachments(true, true);
+    $count = Media_Library_Item::count_items(true, true);
     WP_CLI::log("Not offloaded attachments: " . $count['not_offloaded']);
 
     $notOffloadedIds = Media_Library_Item::get_missing_source_ids(null, $count['not_offloaded']);
