@@ -21,6 +21,6 @@
     },
     "require-dev": {
         "behat/behat": "~2.5",
-        "deliciousbrains/wp-amazon-s3-and-cloudfront": "^2.3"
+        "deliciousbrains/wp-amazon-s3-and-cloudfront": "^2.6.0"
     }
 }
