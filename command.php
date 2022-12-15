@@ -116,7 +116,7 @@ class S3Migration_Command
    * @return int|bool - `int` new id of the item in as3cf_items; - 
    *                  -`false` if there is an error
    */
-  private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $private_sizes = array(), $id = null)
+  private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $extra_info = array(), $id = null)
   {
 
     $migratedItem = new Media_Library_Item(
@@ -128,7 +128,7 @@ class S3Migration_Command
       $source_id,
       $source_path,
       $original_filename,
-      $private_sizes
+      $extra_info
     );
 
     $result = $migratedItem->save();
@@ -222,7 +222,7 @@ class S3Migration_Command
           $postId,
           $existring_item->source_path(),
           wp_basename($existring_item->original_source_path()),
-          $existring_item->private_sizes()
+          $existring_item->extra_info()
         );
       }
 
