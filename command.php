@@ -60,8 +60,6 @@ class S3Migration_Command
       WP_CLI::error("AS3CF-Plugin version has to be at least " . self::$PLUGIN_MIN_VERSION . "!");
       WP_CLI::halt(1);
     }
-    
-    WP_CLI::halt(1);
 
   }
 
