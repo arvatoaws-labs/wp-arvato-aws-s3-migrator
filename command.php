@@ -5,7 +5,6 @@ use DeliciousBrains\WP_Offload_Media\Items\Media_Library_Item as Media_Library_I
 
 class S3Migration_Command
 {
-
   /** @var string $PLUGIN_MIN_VERSION */
   private static $PLUGIN_MIN_VERSION = "2.3";
 
@@ -60,9 +59,7 @@ class S3Migration_Command
       WP_CLI::error("AS3CF-Plugin version has to be at least " . self::$PLUGIN_MIN_VERSION . "!");
       WP_CLI::halt(1);
     }
-
   }
-
 
 
   /**
@@ -100,9 +97,7 @@ class S3Migration_Command
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
     if ($purge === true) {
-
-      $this->purge();
-      
+      $this->purge(); 
     }
 
     $this->runMigration();
@@ -110,7 +105,6 @@ class S3Migration_Command
     WP_CLI::success("Migration done!");
   }
 
- 
 
   /**
    * Wrapper function for Media_Library_Item - Triggers the migration itself
@@ -120,7 +114,6 @@ class S3Migration_Command
    */
   private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $extra_info = array(), $id = null)
   {
-
     $migratedItem = new Media_Library_Item(
       $provider,
       $region,
@@ -146,6 +139,7 @@ class S3Migration_Command
 
     return $result;
   }
+
 
   /**
    * Do the migration 
@@ -197,8 +191,6 @@ class S3Migration_Command
 
           WP_CLI::debug("Filename: " . $attachment['file'], "PostId-" . $postId);
         }
-
-        
 
         $result = $this->migrateItem(
           $settings['provider'], 
