@@ -33,32 +33,36 @@ class S3Migration_Command
     );
 
     try {
-
-      $plugin = WP_CLI::runcommand('plugin get amazon-s3-and-cloudfront --format=json', $options);
-      
+      $activePlugins = WP_CLI::runcommand('plugin list --status=active --format=json', $options);
     } catch (Exception $e) {
       WP_CLI::error("RUN Command Error: ". $e->getMessage() );
       WP_CLI::halt(1);
     }
 
-   
+    function filterByOffloadPlugin($element) {
+      return in_array($element['name'], array('amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'));
+    }
 
-    if ($plugin['status'] !== 'active') {
-      WP_CLI::error("WP Offload Media Lite plugin is not active!");
-      WP_CLI::error($plugin);
+    $offloadPlugin = array_filter($activePlugins, 'filterByOffloadPlugin');
+
+    if (empty($offloadPlugin)) {
+      WP_CLI::error("WP Offload Media (Lite) plugin is not active!");
       WP_CLI::halt(1);
     } else {
-      WP_CLI::success("Offloading Plugin is active");
+      WP_CLI::success("WP Offload Media (Lite) plugin is active");
     }
 
     //Is AS3CF installed in a valid version?
-    $pluginVersion = $GLOBALS['aws_meta']['amazon-s3-and-cloudfront']['version'];
+    $pluginVersion = reset($offloadPlugin)['version'];
     WP_CLI::log("Installed AS3CF-Plugin Version: " . $pluginVersion);
 
     if ($pluginVersion < self::$PLUGIN_MIN_VERSION) {
       WP_CLI::error("AS3CF-Plugin version has to be at least " . self::$PLUGIN_MIN_VERSION . "!");
       WP_CLI::halt(1);
     }
+    
+    WP_CLI::halt(1);
+
   }
 
 
