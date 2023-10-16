@@ -5,7 +5,6 @@ use DeliciousBrains\WP_Offload_Media\Items\Media_Library_Item as Media_Library_I
 
 class S3Migration_Command
 {
-
   /** @var string $PLUGIN_MIN_VERSION */
   private static $PLUGIN_MIN_VERSION = "2.3";
 
@@ -33,26 +32,27 @@ class S3Migration_Command
     );
 
     try {
-
-      $plugin = WP_CLI::runcommand('plugin get amazon-s3-and-cloudfront --format=json', $options);
-      
+      $activePlugins = WP_CLI::runcommand('plugin list --status=active --format=json', $options);
     } catch (Exception $e) {
       WP_CLI::error("RUN Command Error: ". $e->getMessage() );
       WP_CLI::halt(1);
     }
 
-   
+    function filterByOffloadPlugin($element) {
+      return in_array($element['name'], array('amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'));
+    }
 
-    if ($plugin['status'] !== 'active') {
-      WP_CLI::error("WP Offload Media Lite plugin is not active!");
-      WP_CLI::error($plugin);
+    $offloadPlugin = array_filter($activePlugins, 'filterByOffloadPlugin');
+
+    if (empty($offloadPlugin)) {
+      WP_CLI::error("WP Offload Media (Lite) plugin is not active!");
       WP_CLI::halt(1);
     } else {
-      WP_CLI::success("Offloading Plugin is active");
+      WP_CLI::success("WP Offload Media (Lite) plugin is active");
     }
 
     //Is AS3CF installed in a valid version?
-    $pluginVersion = $GLOBALS['aws_meta']['amazon-s3-and-cloudfront']['version'];
+    $pluginVersion = reset($offloadPlugin)['version'];
     WP_CLI::log("Installed AS3CF-Plugin Version: " . $pluginVersion);
 
     if ($pluginVersion < self::$PLUGIN_MIN_VERSION) {
@@ -60,7 +60,6 @@ class S3Migration_Command
       WP_CLI::halt(1);
     }
   }
-
 
 
   /**
@@ -98,9 +97,7 @@ class S3Migration_Command
     $purge = WP_CLI\Utils\get_flag_value($assoc_args, 'purge', false);
 
     if ($purge === true) {
-
-      $this->purge();
-      
+      $this->purge(); 
     }
 
     $this->runMigration();
@@ -108,7 +105,6 @@ class S3Migration_Command
     WP_CLI::success("Migration done!");
   }
 
- 
 
   /**
    * Wrapper function for Media_Library_Item - Triggers the migration itself
@@ -118,7 +114,6 @@ class S3Migration_Command
    */
   private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $extra_info = array(), $id = null)
   {
-
     $migratedItem = new Media_Library_Item(
       $provider,
       $region,
@@ -144,6 +139,7 @@ class S3Migration_Command
 
     return $result;
   }
+
 
   /**
    * Do the migration 
@@ -195,8 +191,6 @@ class S3Migration_Command
 
           WP_CLI::debug("Filename: " . $attachment['file'], "PostId-" . $postId);
         }
-
-        
 
         $result = $this->migrateItem(
           $settings['provider'], 
