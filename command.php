@@ -200,7 +200,7 @@ class S3Migration_Command
           false, 
           $postId,
           $attachment['file'], 
-          $attachment['file']
+          wp_basename($attachment['file'])
         );
 
       } else {
