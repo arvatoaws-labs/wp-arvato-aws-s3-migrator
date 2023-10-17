@@ -187,10 +187,10 @@ class S3Migration_Command
           //maybe some video files dont have 'file' entries -> read from postmeta
           WP_CLI::debug("Reading filename from post_meta 'attached_file'", "PostId-" . $postId);
           
-          $attachment['file'] = get_attached_file($postId);
-
-          WP_CLI::debug("Filename: " . $attachment['file'], "PostId-" . $postId);
+          $attachment['file'] = get_post_meta( $postId, '_wp_attached_file', true );
         }
+
+        WP_CLI::debug("Filename: " . $attachment['file'], "PostId-" . $postId);
 
         $result = $this->migrateItem(
           $settings['provider'], 
