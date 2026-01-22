@@ -38,11 +38,13 @@ class S3Migration_Command
       WP_CLI::halt(1);
     }
 
-    function filterByOffloadPlugin($element) {
-      return in_array($element['name'], array('amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'));
+    if (!is_array($activePlugins)) {
+      $activePlugins = array();
     }
 
-    $offloadPlugin = array_filter($activePlugins, 'filterByOffloadPlugin');
+    $offloadPlugin = array_filter($activePlugins, function($element) {
+      return in_array($element['name'], array('amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'));
+    });
 
     if (empty($offloadPlugin)) {
       WP_CLI::error("WP Offload Media (Lite) plugin is not active!");
@@ -112,7 +114,7 @@ class S3Migration_Command
    * @return int|bool - `int` new id of the item in as3cf_items; - 
    *                  -`false` if there is an error
    */
-  private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, string $original_filename = null, array $extra_info = array(), $id = null)
+  private function migrateItem(string $provider, string $region, string $bucket, string $path, bool $is_private, int $source_id, string $source_path, ?string $original_filename = null, array $extra_info = array(), $id = null)
   {
     $migratedItem = new Media_Library_Item(
       $provider,
@@ -272,10 +274,10 @@ class S3Migration_Command
      * @global wpdb $wpdb
      */
     global $wpdb;
-       
+
     $tableName = $this->getTableName();
     $delete = $wpdb->query("TRUNCATE TABLE $tableName");
- 
+
     WP_CLI::success("Purging finished!");
   }
 
