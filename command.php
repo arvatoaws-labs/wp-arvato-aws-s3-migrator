@@ -23,30 +23,20 @@ class S3Migration_Command
       WP_CLI::halt(2);
     }
 
-    //Is AS3CF Plugin active?
-    $options = array(
-      'return'     => true,   // Return 'STDOUT'; use 'all' for full object.
-      'parse'      => 'json', // Parse captured STDOUT to JSON array.
-      'launch'     => true,  // Reuse the current process.
-      'exit_error' => true,   // Halt script execution on error.
-    );
-
-    try {
-      $activePlugins = WP_CLI::runcommand('plugin list --status=active --format=json', $options);
-    } catch (Exception $e) {
-      WP_CLI::error("RUN Command Error: ". $e->getMessage() );
-      WP_CLI::halt(1);
+    if (!function_exists('get_plugins') || !function_exists('is_plugin_active')) {
+      require_once ABSPATH . 'wp-admin/includes/plugin.php';
     }
 
-    if (!is_array($activePlugins)) {
-      $activePlugins = array();
+    $pluginVersion = null;
+    foreach (get_plugins() as $pluginFile => $pluginData) {
+      $slug = explode('/', $pluginFile)[0];
+      if (in_array($slug, ['amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'], true) && is_plugin_active($pluginFile)) {
+        $pluginVersion = $pluginData['Version'];
+        break;
+      }
     }
 
-    $offloadPlugin = array_filter($activePlugins, function($element) {
-      return in_array($element['name'], array('amazon-s3-and-cloudfront', 'amazon-s3-and-cloudfront-pro'));
-    });
-
-    if (empty($offloadPlugin)) {
+    if ($pluginVersion === null) {
       WP_CLI::error("WP Offload Media (Lite) plugin is not active!");
       WP_CLI::halt(1);
     } else {
@@ -54,10 +44,9 @@ class S3Migration_Command
     }
 
     //Is AS3CF installed in a valid version?
-    $pluginVersion = reset($offloadPlugin)['version'];
     WP_CLI::log("Installed AS3CF-Plugin Version: " . $pluginVersion);
 
-    if ($pluginVersion < self::$PLUGIN_MIN_VERSION) {
+    if (version_compare($pluginVersion, self::$PLUGIN_MIN_VERSION, '<')) {
       WP_CLI::error("AS3CF-Plugin version has to be at least " . self::$PLUGIN_MIN_VERSION . "!");
       WP_CLI::halt(1);
     }
